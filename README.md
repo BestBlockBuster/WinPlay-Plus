@@ -1,4 +1,18 @@
+# Disclaimer
+
+This &nbsp;***WILL BE***&nbsp; a modification of &nbsp;[![WinPlay](https://img.shields.io/badge/WinPlay-purple?logo=github)](https://github.com/dineshdhotrad/WinPlay)&nbsp;, built by &nbsp;[![Dinesh Dhotrad](https://img.shields.io/badge/Dinesh_Dhotrad-purple?logo=github)](https://github.com/dineshdhotrad?logo=github)&nbsp; .
+
+My additions &nbsp;***WILL BE***&nbsp;:
+- Dual Audio Option
+- Selective Audio Source Option
+- Selective Monitor Source Option
+- Resolution Downscaling Option
+- Options Persist (Save to file)
+
 <div align="center">
+
+---
+<br>
 
 <img src="assets/branding/icon-256.png" alt="WinPlay" width="128" height="128" />
 
