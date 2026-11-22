@@ -7,6 +7,7 @@ My additions &nbsp;***WILL BE***&nbsp;:
 - Selective Audio Source Option
 - Selective Monitor Source Option
 - Resolution Downscaling Option
+- Option to set Max Framerate
 - Options Persist (Save to file)
 
 <div align="center">
