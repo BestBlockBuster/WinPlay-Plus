@@ -21,6 +21,18 @@ public sealed partial class SettingsPopupView : UserControl
     {
         InitializeComponent();
         Loaded += OnLoaded;
+
+        DownscaleWidthBox.LostFocus += (s, e) => CommitWidth();
+        DownscaleWidthBox.KeyDown += (s, e) => { if (e.Key == Windows.System.VirtualKey.Enter) { CommitWidth(); e.Handled = true; } };
+        DownscaleWidthBox.ValueChanged += (s, e) => { if (s.FocusState != FocusState.Keyboard) CommitWidth(); };
+
+        DownscaleHeightBox.LostFocus += (s, e) => CommitHeight();
+        DownscaleHeightBox.KeyDown += (s, e) => { if (e.Key == Windows.System.VirtualKey.Enter) { CommitHeight(); e.Handled = true; } };
+        DownscaleHeightBox.ValueChanged += (s, e) => { if (s.FocusState != FocusState.Keyboard) CommitHeight(); };
+
+        MaxFramerateBox.LostFocus += (s, e) => CommitFramerate();
+        MaxFramerateBox.KeyDown += (s, e) => { if (e.Key == Windows.System.VirtualKey.Enter) { CommitFramerate(); e.Handled = true; } };
+        MaxFramerateBox.ValueChanged += (s, e) => { if (s.FocusState != FocusState.Keyboard) CommitFramerate(); };
     }
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -152,13 +164,17 @@ public sealed partial class SettingsPopupView : UserControl
         }
     }
 
-    private void DownscaleWidthBox_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+    private void CommitWidth()
     {
         if (_isPopulating || _suppressResolutionEvents) return;
-        if (double.IsNaN(sender.Value)) return;
+        if (double.IsNaN(DownscaleWidthBox.Value)) return;
 
-        int w = (int)Math.Round(sender.Value);
+        int w = (int)Math.Round(DownscaleWidthBox.Value);
         w = Math.Max(2, w & ~1);
+
+        _suppressResolutionEvents = true;
+        DownscaleWidthBox.Value = w;
+        _suppressResolutionEvents = false;
 
         var settings = SettingsService.Instance.Current;
         settings.DownscaleWidth = w;
@@ -175,13 +191,17 @@ public sealed partial class SettingsPopupView : UserControl
         SettingsService.Instance.Save(settings);
     }
 
-    private void DownscaleHeightBox_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
+    private void CommitHeight()
     {
         if (_isPopulating || _suppressResolutionEvents) return;
-        if (double.IsNaN(sender.Value)) return;
+        if (double.IsNaN(DownscaleHeightBox.Value)) return;
 
-        int h = (int)Math.Round(sender.Value);
+        int h = (int)Math.Round(DownscaleHeightBox.Value);
         h = Math.Max(2, h & ~1);
+
+        _suppressResolutionEvents = true;
+        DownscaleHeightBox.Value = h;
+        _suppressResolutionEvents = false;
 
         var settings = SettingsService.Instance.Current;
         settings.DownscaleHeight = h;
@@ -195,6 +215,23 @@ public sealed partial class SettingsPopupView : UserControl
             settings.DownscaleWidth = w;
         }
 
+        SettingsService.Instance.Save(settings);
+    }
+
+    private void CommitFramerate()
+    {
+        if (_isPopulating) return;
+        if (double.IsNaN(MaxFramerateBox.Value)) return;
+
+        int fps = (int)Math.Round(MaxFramerateBox.Value);
+        int clamped = SettingsService.ClampFramerate(fps);
+        if (MaxFramerateBox.Value != clamped)
+        {
+            MaxFramerateBox.Value = clamped;
+        }
+
+        var settings = SettingsService.Instance.Current;
+        settings.MaxFramerate = clamped;
         SettingsService.Instance.Save(settings);
     }
 
@@ -218,24 +255,6 @@ public sealed partial class SettingsPopupView : UserControl
             settings.DownscaleHeight = h;
         }
 
-        SettingsService.Instance.Save(settings);
-    }
-
-    private void MaxFramerateBox_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs args)
-    {
-        if (_isPopulating) return;
-        if (double.IsNaN(sender.Value)) return;
-
-        int fps = (int)Math.Round(sender.Value);
-        int clamped = SettingsService.ClampFramerate(fps);
-        if (fps != clamped)
-        {
-            sender.Value = clamped;
-            return;
-        }
-
-        var settings = SettingsService.Instance.Current;
-        settings.MaxFramerate = clamped;
         SettingsService.Instance.Save(settings);
     }
 

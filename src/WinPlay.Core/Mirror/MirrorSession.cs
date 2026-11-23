@@ -66,6 +66,8 @@ public sealed class MirrorSession : IAsyncDisposable
         = new(new System.Collections.Concurrent.ConcurrentQueue<byte[]>(), boundedCapacity: 16);
 
     private bool _codecSent;
+    private int _lastCodecWidth;
+    private int _lastCodecHeight;
     private byte[]? _sps;
     private byte[]? _pps;
     private long _framesSent;
@@ -417,11 +419,17 @@ public sealed class MirrorSession : IAsyncDisposable
                 else if (type == H264.NalPps) _pps = nal;
             }
 
-            // Send the SPS/PPS codec packet once, before the first VCL frame. The header
-            // carries the encoded content size and the receiver's display size so the TV
+            int currentW = _source?.Width ?? 0;
+            int currentH = _source?.Height ?? 0;
+            bool resolutionChanged = _codecSent && (_lastCodecWidth != currentW || _lastCodecHeight != currentH);
+
+            // Send the SPS/PPS codec packet once, before the first VCL frame (or on resolution change).
+            // The header carries the encoded content size and the receiver's display size so the TV
             // can pillarbox/letterbox content whose aspect differs from the panel.
-            if (!_codecSent && _sps is not null && _pps is not null && _source is not null)
+            if ((!_codecSent || resolutionChanged) && _sps is not null && _pps is not null && _source is not null)
             {
+                _lastCodecWidth = currentW;
+                _lastCodecHeight = currentH;
                 int displayW = _receiverDisplayW > 0 ? _receiverDisplayW : _source.Width;
                 int displayH = _receiverDisplayH > 0 ? _receiverDisplayH : _source.Height;
                 byte[] avcc = H264.BuildAvcCConfig(_sps, _pps);

@@ -39,4 +39,33 @@ public class AudioFeaturesTests
         using var source = mover.CreateCaptureSource(deviceId: null);
         Assert.NotNull(source);
     }
+
+    private sealed class MockAudioSource(short value) : IAudioSource
+    {
+        public bool Disposed { get; private set; }
+        public void Read(Span<short> interleavedStereo) => interleavedStereo.Fill(value);
+        public void Dispose() => Disposed = true;
+    }
+
+    [Fact]
+    public void SwitchableAudioSource_HotSwap_SeamlesslySwitchesAndDisposesOld()
+    {
+        var src1 = new MockAudioSource(100);
+        var src2 = new MockAudioSource(200);
+
+        using var switchable = new SwitchableAudioSource(src1);
+        Span<short> buf = stackalloc short[4];
+
+        switchable.Read(buf);
+        Assert.Equal(100, buf[0]);
+        Assert.False(src1.Disposed);
+
+        // Hot swap to source 2
+        switchable.SwitchTo(src2);
+        Assert.True(src1.Disposed); // Old source disposed
+
+        switchable.Read(buf);
+        Assert.Equal(200, buf[0]);
+        Assert.False(src2.Disposed);
+    }
 }

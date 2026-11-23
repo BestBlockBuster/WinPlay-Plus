@@ -17,10 +17,12 @@ public sealed class ScreenMirrorSource : IH264VideoSource
 {
     private readonly int _fps;
     private readonly int _bitrateOverride;
-    private readonly int _adapterIndex;
-    private readonly int _outputIndex;
+    private readonly object _configLock = new();
+    private int _adapterIndex;
+    private int _outputIndex;
     private readonly int? _customWidth;
     private readonly int? _customHeight;
+    private volatile bool _configChanged;
     private Thread? _thread;
     private volatile bool _stopped;
     private int _receiverDisplayW;
@@ -31,6 +33,17 @@ public sealed class ScreenMirrorSource : IH264VideoSource
 
     public event Action<ReadOnlyMemory<byte>, bool>? FrameEncoded;
     public event Action<string>? Diagnostic;
+
+    /// <summary>Dynamically updates display output while streaming.</summary>
+    public void UpdateConfiguration(int adapterIndex, int outputIndex)
+    {
+        lock (_configLock)
+        {
+            _adapterIndex = adapterIndex;
+            _outputIndex = outputIndex;
+            _configChanged = true;
+        }
+    }
 
     /// <param name="fps">Max framerate in fps (clamped between 24 and 60).</param>
     /// <param name="bitrateMbps">Encoder bitrate; 0 = auto (scaled to the negotiated resolution).</param>
@@ -113,10 +126,52 @@ public sealed class ScreenMirrorSource : IH264VideoSource
 
             var sw = Stopwatch.StartNew();
             long frameIndex = 0;
-            double frameMs = 1000.0 / _fps;
 
             while (!_stopped && !ct.IsCancellationRequested)
             {
+                if (_configChanged)
+                {
+                    _configChanged = false;
+                    int curAdapter, curOutput;
+                    lock (_configLock)
+                    {
+                        curAdapter = _adapterIndex;
+                        curOutput = _outputIndex;
+                    }
+                    try
+                    {
+                        encoder?.Dispose();
+                        converter?.Dispose();
+                        capture?.Dispose();
+
+                        capture = new DesktopDuplicator(curAdapter, curOutput);
+                        srcW = capture.Width;
+                        srcH = capture.Height;
+
+                        targetW = srcW;
+                        targetH = srcH;
+                        if (_customWidth.HasValue && _customHeight.HasValue && _customWidth.Value > 0 && _customHeight.Value > 0)
+                        {
+                            targetW = Math.Min(srcW, _customWidth.Value & ~1);
+                            targetH = Math.Min(srcH, _customHeight.Value & ~1);
+                        }
+                        (Width, Height) = NegotiateEncodeSize(targetW, targetH, _receiverDisplayW, _receiverDisplayH);
+                        bitrate = _bitrateOverride > 0 ? _bitrateOverride : AutoBitrate(Width, Height, _fps);
+
+                        converter = new GpuColorConverter(capture.Device, srcW, srcH, Width, Height, _fps);
+                        encoder = CreateEncoder(Width, Height, _fps, bitrate);
+                        encoder.Encoded += au => FrameEncoded?.Invoke(au, IsKeyframe(au));
+                        nv12 = new byte[Width * Height * 3 / 2];
+                        haveFrame = false;
+                        Diagnostic?.Invoke($"switched to display: {srcW}x{srcH} → encode {Width}x{Height} @ {_fps}fps ({encoder.Name})");
+                    }
+                    catch (Exception ex)
+                    {
+                        Diagnostic?.Invoke($"reconfiguration error: {ex.Message}");
+                    }
+                }
+
+                double frameMs = 1000.0 / _fps;
                 double dueMs = frameIndex * frameMs;
                 double nowMs = sw.Elapsed.TotalMilliseconds;
                 if (nowMs < dueMs)

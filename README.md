@@ -1,21 +1,26 @@
 # Disclaimer
 
-This &nbsp;***WILL BE***&nbsp; a modification of &nbsp;[![WinPlay](https://img.shields.io/badge/WinPlay-purple?logo=github)](https://github.com/dineshdhotrad/WinPlay)&nbsp;, built by &nbsp;[![Dinesh Dhotrad](https://img.shields.io/badge/Dinesh_Dhotrad-purple?logo=github)](https://github.com/dineshdhotrad?logo=github)&nbsp; .
+&nbsp;***This open-source software is a modification of [![WinPlay](https://img.shields.io/badge/WinPlay-purple?logo=github)](https://github.com/dineshdhotrad/WinPlay) built by [![Dinesh Dhotrad](https://img.shields.io/badge/Dinesh_Dhotrad-purple?logo=github)](https://github.com/dineshdhotrad?logo=github)***&nbsp; .
 
-My additions &nbsp;***WILL BE***&nbsp;:
-- Dual Audio Option
-  - An option that, when enabled, continues to play the audio from your system, rather than only sending it via AirPlay (which, before this, effectively muted it on your system).
-- Selective Audio Source Option
-  - A multiple choice drop down menu from which you can select the audio source from output devices. (eg: Sony Speakers, Razer Headphones, Virtual Audio Cable). (Note, this setting must impact the source for both audio-sharing, and the audio that is encoded into the video when screen-mirroring.)
-- Selective Display Source Option
-  - A multiple choice drop down menu from which you can select the video source (eg: Alienware Monitor, Sony TV).
-- Resolution Downscaling Option
-  - Two number boxes, pixel width and height, with an aspect-ratio lock so that when changing one value, the other value changes to match. (Note, switching display source should obviously update these resolution values, aspect ratio, and any other relevant backend info.)
-- Option to set Max Framerate
-  - A number box that limits framerate. The box itself should only be allowed to populate with numbers in the range of 24-60. Numbers outside this range should be pulled back to the closest value.
-- Options Persist (Save to file)
+My modifications are the options within the new settings menu:
 
-Note, all settings must prepopulate with the default selections (the parameters the software would have chosen without any interventions from the settings). There must also be a "reset to defaults" button that resets to the default parameters. Modified options that get saved to file must be loaded and used by the software after it is reopened.
+- Dual Audio
+
+  - Rather than sending all the audio via AirPlay, this allows the audio to continue playing from your desktop.
+- Audio Source Selection
+  - Select the audio source from your output devices.
+  - This setting impacts the audio source for both the "Audio" and "Mirror" streaming options.
+  - This setting becomes especially useful if you use OBS or virtual audio cables.
+- Display Source Selection
+  - Select the monitor from which to stream video.
+- Resolution Selection
+  - Pixel width and height, with an aspect-ratio lock to keep the height and width relative to each other.
+  - Switching displays resets this value to that display's default resolution.
+- Max Framerate
+  - AirPlay only allows a limited amount of data to be sent.
+  - Lowering the framerate and/or resolution can provide a smoother image and reduce stuttering/freezing.
+- Settings Persist
+  - All of these settings will remain as you left them upon reopening the app.
 
 <div align="center">
 

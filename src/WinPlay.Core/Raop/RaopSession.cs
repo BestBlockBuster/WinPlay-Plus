@@ -28,7 +28,9 @@ namespace WinPlay.Core.Raop;
 /// </summary>
 public sealed class RaopSession : IAsyncDisposable
 {
-    private const int LatencyFrames = 88200; // ~2 s at 44.1 kHz (classic realtime latency)
+    private const int LatencyFrames = 11025; // 250 ms at 44.1 kHz (matches screen-mirroring audio latency)
+                                             // OG WAS = 88200; // ~2 s at 44.1 kHz (classic realtime latency)
+                                             // which leaves a larger buffer for network jitter, allowing for smoother playback, but at the cost of a higher delay.
     private const int SampleRate = 44100;
 
     private readonly RtspConnection _rtsp = new();

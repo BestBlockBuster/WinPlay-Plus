@@ -170,18 +170,17 @@
                                         x:Name="DownscaleWidthBox"
                                         Grid.Column="0"
                                         Header="Width"
-                                        SpinButtonPlacementMode="Inline"
+                                        SpinButtonPlacementMode="Compact"
                                         Minimum="2"
                                         Maximum="7680"
-                                        SmallChange="2"
-                                        ValueChanged="DownscaleWidthBox_ValueChanged" />
+                                        SmallChange="2" />
 
                                     <ToggleButton
                                         x:Name="AspectLockToggle"
                                         Grid.Column="1"
                                         VerticalAlignment="Bottom"
                                         Margin="0,0,0,2"
-                                        Padding="6"
+                                        Padding="8,6"
                                         CornerRadius="6"
                                         ToolTipService.ToolTip="Aspect Ratio Lock"
                                         Click="AspectLockToggle_Click">
@@ -192,11 +191,10 @@
                                         x:Name="DownscaleHeightBox"
                                         Grid.Column="2"
                                         Header="Height"
-                                        SpinButtonPlacementMode="Inline"
+                                        SpinButtonPlacementMode="Compact"
                                         Minimum="2"
                                         Maximum="4320"
-                                        SmallChange="2"
-                                        ValueChanged="DownscaleHeightBox_ValueChanged" />
+                                        SmallChange="2" />
                                 </Grid>
 
                                 <TextBlock
@@ -227,11 +225,10 @@
                                 <NumberBox
                                     x:Name="MaxFramerateBox"
                                     Header="Framerate (fps)"
-                                    SpinButtonPlacementMode="Inline"
+                                    SpinButtonPlacementMode="Compact"
                                     Minimum="24"
                                     Maximum="60"
-                                    SmallChange="1"
-                                    ValueChanged="MaxFramerateBox_ValueChanged" />
+                                    SmallChange="1" />
                             </StackPanel>
                         </Border>
 

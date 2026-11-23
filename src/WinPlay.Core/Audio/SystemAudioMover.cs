@@ -6,9 +6,10 @@ namespace WinPlay.Core.Audio;
 
 /// <summary>
 /// Moves the PC's audio to AirPlay the way a Mac does: while streaming, it mutes the local
-/// output endpoint (so the speakers are silent and there is no ~2 s echo against the
+/// default output endpoint (so the speakers are silent and there is no ~2 s echo against the
 /// receiver) and captures the system mix via <see cref="ProcessLoopbackCapture"/>, which
-/// keeps working even though the endpoint is muted. On the last destination stopping, the
+/// keeps working even though the endpoint is muted. Explicitly selected endpoints use
+/// ordinary endpoint loopback and are never muted. On the last destination stopping, the
 /// speakers are restored to their previous state.
 ///
 /// If process-loopback capture is unavailable (older Windows), it falls back to ordinary
@@ -27,15 +28,15 @@ public sealed class SystemAudioMover : IDisposable
     public bool DualAudio { get; private set; }
 
     /// <summary>
-    /// Mutes the output endpoint (idempotent) so only the receiver is audible,
-    /// unless <paramref name="dualAudio"/> is true.
+    /// Mutes the default output endpoint (idempotent) so only the receiver is audible.
+    /// Explicit device loopback and <paramref name="dualAudio"/> leave local playback enabled.
     /// </summary>
     public void EnterStreaming(string? deviceId = null, bool dualAudio = false)
     {
         lock (_lock)
         {
             DualAudio = dualAudio;
-            if (dualAudio || _muting || !_processLoopbackSupported) return;
+            if (dualAudio || !string.IsNullOrEmpty(deviceId) || _muting || !_processLoopbackSupported) return;
             try
             {
                 using var enumerator = new MMDeviceEnumerator();
@@ -87,11 +88,11 @@ public sealed class SystemAudioMover : IDisposable
         lock (_lock)
         {
             DualAudio = dualAudio;
-            if (dualAudio && _muting)
+            if ((dualAudio || !string.IsNullOrEmpty(deviceId)) && _muting)
             {
                 ExitStreaming();
             }
-            else if (!dualAudio && !_muting)
+            else if (!dualAudio && string.IsNullOrEmpty(deviceId) && !_muting)
             {
                 EnterStreaming(deviceId, dualAudio: false);
             }

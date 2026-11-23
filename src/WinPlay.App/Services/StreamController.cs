@@ -31,6 +31,10 @@ public sealed class StreamController : IAsyncDisposable
     private readonly SystemAudioMover _mover = new();
     private readonly CancellationTokenSource _lifetime = new();
     private readonly DiagnosticsLog _diagnostics = new();
+    private readonly object _audioSourceSwitchLock = new();
+    private Task _audioSourceSwitchTask = Task.CompletedTask;
+    private string? _lastAudioSourceId;
+    private long _audioSourceRevision;
 
     public event Action<string, string>? SessionStage;   // key, message
     public event Action<string, Exception>? SessionFailed;
@@ -40,6 +44,7 @@ public sealed class StreamController : IAsyncDisposable
 
     public StreamController()
     {
+        _lastAudioSourceId = SettingsService.Instance.Current.AudioSourceId;
         SessionStage += (key, msg) => _diagnostics.Add(key, msg);
         SessionFailed += (key, ex) => _diagnostics.Add(key, $"failed: {ex.Message}");
         SettingsService.Instance.SettingsChanged += OnSettingsChanged;
@@ -47,9 +52,82 @@ public sealed class StreamController : IAsyncDisposable
 
     private void OnSettingsChanged(AppSettings settings)
     {
+        string? previousAudioSourceId = Interlocked.Exchange(ref _lastAudioSourceId, settings.AudioSourceId);
+        bool audioSourceChanged = !string.Equals(
+            previousAudioSourceId, settings.AudioSourceId, StringComparison.OrdinalIgnoreCase);
+
         if (!_audio.IsEmpty || !_mirrors.IsEmpty)
         {
             _mover.SetDualAudio(settings.DualAudio, settings.AudioSourceId);
+
+            foreach (var mirror in _mirrors.Values)
+            {
+                // Dynamically update display source on active mirror
+                var (adapterIdx, outputIdx) = SettingsService.Instance.GetDisplayIndices(settings.DisplaySourceId);
+                mirror.Source.UpdateConfiguration(adapterIdx, outputIdx);
+            }
+        }
+
+        if (audioSourceChanged)
+        {
+            long revision = Interlocked.Increment(ref _audioSourceRevision);
+            lock (_audioSourceSwitchLock)
+            {
+                Task previous = _audioSourceSwitchTask;
+                _audioSourceSwitchTask = Task.Run(async () =>
+                {
+                    await previous.ConfigureAwait(false);
+                    await SwitchAudioSourcesAsync(settings.AudioSourceId, revision).ConfigureAwait(false);
+                });
+            }
+        }
+    }
+
+    private async Task SwitchAudioSourcesAsync(string? deviceId, long revision)
+    {
+        if (revision != Volatile.Read(ref _audioSourceRevision)) return;
+
+        foreach (var dest in _audio.Values)
+        {
+            await SwitchAudioSourceAsync(dest.Entry.Key, () => dest.AudioSource, deviceId, revision)
+                .ConfigureAwait(false);
+        }
+
+        foreach (var (key, mirror) in _mirrors)
+        {
+            await SwitchAudioSourceAsync(key, () => mirror.AudioSource, deviceId, revision)
+                .ConfigureAwait(false);
+        }
+    }
+
+    private async Task SwitchAudioSourceAsync(string key, Func<SwitchableAudioSource?> getSource,
+        string? deviceId, long revision)
+    {
+        if (getSource() is null) return;
+
+        try
+        {
+            var newSource = await Task.Run(() => _mover.CreateCaptureSource(deviceId), _lifetime.Token)
+                .ConfigureAwait(false);
+            if (_lifetime.IsCancellationRequested || revision != Volatile.Read(ref _audioSourceRevision))
+            {
+                newSource.Dispose();
+                return;
+            }
+
+            var switchable = getSource();
+            if (switchable is null)
+                newSource.Dispose();
+            else
+                switchable.SwitchTo(newSource);
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            SessionFailed?.Invoke(key, ex);
         }
     }
 
@@ -72,6 +150,7 @@ public sealed class StreamController : IAsyncDisposable
         public CancellationTokenSource Cts { get; } = cts;
         public SemaphoreSlim Gate { get; } = new(1, 1);
         public GroupSession? Session { get; set; }
+        public SwitchableAudioSource? AudioSource { get; set; }
         public volatile bool Stopped;
     }
 
@@ -96,7 +175,9 @@ public sealed class StreamController : IAsyncDisposable
             // local speakers so only the receiver plays (avoids a ~2 s echo), unless Dual Audio is enabled.
             var settings = SettingsService.Instance.Current;
             _mover.EnterStreaming(settings.AudioSourceId, settings.DualAudio);
-            await session.StartStreamingAsync(_mover.CreateCaptureSource(settings.AudioSourceId), volumeDb).ConfigureAwait(false);
+            var switchable = new SwitchableAudioSource(_mover.CreateCaptureSource(settings.AudioSourceId));
+            dest.AudioSource = switchable;
+            await session.StartStreamingAsync(switchable, volumeDb).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -152,7 +233,9 @@ public sealed class StreamController : IAsyncDisposable
                         dest.Session = session;
                         session.Faulted += _ => OnAudioFaulted(dest);
                         var settings = SettingsService.Instance.Current;
-                        await session.StartStreamingAsync(_mover.CreateCaptureSource(settings.AudioSourceId), dest.VolumeDb).ConfigureAwait(false);
+                        var switchable = new SwitchableAudioSource(_mover.CreateCaptureSource(settings.AudioSourceId));
+                        dest.AudioSource = switchable;
+                        await session.StartStreamingAsync(switchable, dest.VolumeDb).ConfigureAwait(false);
                         SessionStage?.Invoke(dest.Entry.Key, "reconnected");
                         return;
                     }
@@ -218,7 +301,7 @@ public sealed class StreamController : IAsyncDisposable
 
     // ------------------------------------------------------------ screen mirroring
 
-    private sealed record MirrorDestination(MirrorSession Session, ScreenMirrorSource Source);
+    private sealed record MirrorDestination(MirrorSession Session, ScreenMirrorSource Source, SwitchableAudioSource? AudioSource);
 
     /// <summary>Starts mirroring the desktop to an Apple TV (pairs first if needed).</summary>
     public async Task StartMirrorAsync(PickerEntry entry, CancellationToken ct)
@@ -255,21 +338,24 @@ public sealed class StreamController : IAsyncDisposable
             customHeight: settings.DownscaleHeight);
 
         source.Diagnostic += d => SessionStage?.Invoke(entry.Key, $"capture: {d}");
-        if (!_mirrors.TryAdd(entry.Key, new MirrorDestination(session, source)))
-        {
-            await session.DisposeAsync().ConfigureAwait(false);
-            await source.DisposeAsync().ConfigureAwait(false);
-            return;
-        }
 
         // Mirror carries audio in the same session (Apple TV syncs A/V itself). Mute the PC
         // and feed system audio (unless Dual Audio enabled), using the selected audio source.
-        WinPlay.Core.Audio.IAudioSource? mirrorAudio = null;
+        SwitchableAudioSource? mirrorAudio = null;
         if (session.HasAudio && !_audio.ContainsKey(entry.Key))
         {
             _mover.EnterStreaming(settings.AudioSourceId, settings.DualAudio);
-            mirrorAudio = _mover.CreateCaptureSource(settings.AudioSourceId);
+            mirrorAudio = new SwitchableAudioSource(_mover.CreateCaptureSource(settings.AudioSourceId));
         }
+
+        if (!_mirrors.TryAdd(entry.Key, new MirrorDestination(session, source, mirrorAudio)))
+        {
+            await session.DisposeAsync().ConfigureAwait(false);
+            await source.DisposeAsync().ConfigureAwait(false);
+            mirrorAudio?.Dispose();
+            return;
+        }
+
         _ = session.StartStreamingAsync(source, mirrorAudio);
     }
 
@@ -279,6 +365,7 @@ public sealed class StreamController : IAsyncDisposable
         {
             await m.Session.DisposeAsync().ConfigureAwait(false);
             await m.Source.DisposeAsync().ConfigureAwait(false);
+            m.AudioSource?.Dispose();
         }
         // Restore the local speakers once nothing (audio or mirror) is streaming.
         if (_audio.IsEmpty && _mirrors.IsEmpty) _mover.ExitStreaming();
@@ -335,6 +422,10 @@ public sealed class StreamController : IAsyncDisposable
             await StopAudioAsync(key).ConfigureAwait(false);
         foreach (string key in _mirrors.Keys.ToArray())
             await StopMirrorAsync(key).ConfigureAwait(false);
+        Task pendingAudioSourceSwitch;
+        lock (_audioSourceSwitchLock)
+            pendingAudioSourceSwitch = _audioSourceSwitchTask;
+        await pendingAudioSourceSwitch.ConfigureAwait(false);
         _mover.Dispose();
         _lifetime.Dispose();
     }
