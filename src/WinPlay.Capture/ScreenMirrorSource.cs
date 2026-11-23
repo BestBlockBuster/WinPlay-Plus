@@ -17,6 +17,10 @@ public sealed class ScreenMirrorSource : IH264VideoSource
 {
     private readonly int _fps;
     private readonly int _bitrateOverride;
+    private readonly int _adapterIndex;
+    private readonly int _outputIndex;
+    private readonly int? _customWidth;
+    private readonly int? _customHeight;
     private Thread? _thread;
     private volatile bool _stopped;
     private int _receiverDisplayW;
@@ -28,11 +32,26 @@ public sealed class ScreenMirrorSource : IH264VideoSource
     public event Action<ReadOnlyMemory<byte>, bool>? FrameEncoded;
     public event Action<string>? Diagnostic;
 
+    /// <param name="fps">Max framerate in fps (clamped between 24 and 60).</param>
     /// <param name="bitrateMbps">Encoder bitrate; 0 = auto (scaled to the negotiated resolution).</param>
-    public ScreenMirrorSource(int fps = 60, int bitrateMbps = 0)
+    /// <param name="adapterIndex">DXGI adapter index.</param>
+    /// <param name="outputIndex">DXGI output (display) index.</param>
+    /// <param name="customWidth">Optional downscaled width in pixels.</param>
+    /// <param name="customHeight">Optional downscaled height in pixels.</param>
+    public ScreenMirrorSource(
+        int fps = 60,
+        int bitrateMbps = 0,
+        int adapterIndex = 0,
+        int outputIndex = 0,
+        int? customWidth = null,
+        int? customHeight = null)
     {
-        _fps = fps;
+        _fps = Math.Clamp(fps, 24, 60);
         _bitrateOverride = bitrateMbps * 1_000_000;
+        _adapterIndex = adapterIndex;
+        _outputIndex = outputIndex;
+        _customWidth = customWidth;
+        _customHeight = customHeight;
     }
 
     public void Configure(int receiverDisplayWidth, int receiverDisplayHeight)
@@ -63,12 +82,20 @@ public sealed class ScreenMirrorSource : IH264VideoSource
         IH264Encoder? encoder = null;
         try
         {
-            capture = new DesktopDuplicator();
+            capture = new DesktopDuplicator(_adapterIndex, _outputIndex);
             int srcW = capture.Width, srcH = capture.Height;
+
+            int targetW = srcW;
+            int targetH = srcH;
+            if (_customWidth.HasValue && _customHeight.HasValue && _customWidth.Value > 0 && _customHeight.Value > 0)
+            {
+                targetW = Math.Min(srcW, _customWidth.Value & ~1);
+                targetH = Math.Min(srcH, _customHeight.Value & ~1);
+            }
 
             // Negotiate the encode size: fit the desktop into the receiver's advertised
             // display (or use the desktop size if none advertised). Even dimensions only.
-            (Width, Height) = NegotiateEncodeSize(srcW, srcH, _receiverDisplayW, _receiverDisplayH);
+            (Width, Height) = NegotiateEncodeSize(targetW, targetH, _receiverDisplayW, _receiverDisplayH);
             int bitrate = _bitrateOverride > 0 ? _bitrateOverride : AutoBitrate(Width, Height, _fps);
 
             // GPU color-convert + scale (BGRA → NV12) on the capture device — the heaviest

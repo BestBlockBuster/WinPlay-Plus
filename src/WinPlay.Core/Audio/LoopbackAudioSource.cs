@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+using NAudio.CoreAudioApi;
 using NAudio.Dsp;
 using NAudio.Wave;
 
@@ -24,9 +25,9 @@ public sealed class LoopbackAudioSource : IAudioSource
     private float[] _floatScratch = new float[16384];
     private float[] _resampleOut = new float[16384];
 
-    public LoopbackAudioSource()
+    public LoopbackAudioSource(MMDevice? device = null)
     {
-        _capture = new WasapiLoopbackCapture();
+        _capture = device is not null ? new WasapiLoopbackCapture(device) : new WasapiLoopbackCapture();
         _sourceChannels = _capture.WaveFormat.Channels;
         _sourceRate = _capture.WaveFormat.SampleRate;
 

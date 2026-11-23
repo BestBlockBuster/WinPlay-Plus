@@ -23,26 +23,57 @@ internal sealed class DesktopDuplicator : IDisposable
     public int Height { get; }
     public Format Format { get; }
 
-    public DesktopDuplicator()
+    public DesktopDuplicator(int adapterIndex = 0, int outputIndex = 0)
     {
         FeatureLevel[] levels = [FeatureLevel.Level_11_1, FeatureLevel.Level_11_0, FeatureLevel.Level_10_1, FeatureLevel.Level_10_0];
-        // BgraSupport enables the video processor; VideoSupport enables the color-convert path.
-        D3D11.D3D11CreateDevice(null, DriverType.Hardware,
-            DeviceCreationFlags.BgraSupport | DeviceCreationFlags.VideoSupport, levels,
-            out ID3D11Device? device).CheckError();
-        Device = device!;
-        Context = Device.ImmediateContext;
-
-        using var dxgiDevice = Device.QueryInterface<IDXGIDevice>();
-        using var adapter = dxgiDevice.GetAdapter();
-        adapter.EnumOutputs(0, out IDXGIOutput output).CheckError();
-        using (output)
-        using (var output1 = output.QueryInterface<IDXGIOutput1>())
+        using var factory = DXGI.CreateDXGIFactory1<IDXGIFactory1>();
+        IDXGIAdapter1? targetAdapter = null;
+        if (factory != null && factory.EnumAdapters1((uint)adapterIndex, out IDXGIAdapter1 ad).Success)
         {
-            var desc = output.Description;
-            Width = desc.DesktopCoordinates.Right - desc.DesktopCoordinates.Left;
-            Height = desc.DesktopCoordinates.Bottom - desc.DesktopCoordinates.Top;
-            _duplication = output1.DuplicateOutput(Device);
+            targetAdapter = ad;
+        }
+
+        if (targetAdapter != null)
+        {
+            using (targetAdapter)
+            {
+                // When passing an explicit adapter to D3D11CreateDevice, DriverType must be DriverType.Unknown.
+                D3D11.D3D11CreateDevice(targetAdapter, DriverType.Unknown,
+                    DeviceCreationFlags.BgraSupport | DeviceCreationFlags.VideoSupport, levels,
+                    out ID3D11Device? device).CheckError();
+                Device = device!;
+                Context = Device.ImmediateContext;
+
+                targetAdapter.EnumOutputs((uint)outputIndex, out IDXGIOutput output).CheckError();
+                using (output)
+                using (var output1 = output.QueryInterface<IDXGIOutput1>())
+                {
+                    var desc = output.Description;
+                    Width = desc.DesktopCoordinates.Right - desc.DesktopCoordinates.Left;
+                    Height = desc.DesktopCoordinates.Bottom - desc.DesktopCoordinates.Top;
+                    _duplication = output1.DuplicateOutput(Device);
+                }
+            }
+        }
+        else
+        {
+            D3D11.D3D11CreateDevice(null, DriverType.Hardware,
+                DeviceCreationFlags.BgraSupport | DeviceCreationFlags.VideoSupport, levels,
+                out ID3D11Device? device).CheckError();
+            Device = device!;
+            Context = Device.ImmediateContext;
+
+            using var dxgiDevice = Device.QueryInterface<IDXGIDevice>();
+            using var adapter = dxgiDevice.GetAdapter();
+            adapter.EnumOutputs(0, out IDXGIOutput output).CheckError();
+            using (output)
+            using (var output1 = output.QueryInterface<IDXGIOutput1>())
+            {
+                var desc = output.Description;
+                Width = desc.DesktopCoordinates.Right - desc.DesktopCoordinates.Left;
+                Height = desc.DesktopCoordinates.Bottom - desc.DesktopCoordinates.Top;
+                _duplication = output1.DuplicateOutput(Device);
+            }
         }
         Format = Format.B8G8R8A8_UNorm;
     }

@@ -53,6 +53,21 @@ public sealed partial class FlyoutWindow : Window
 
         Activated += OnActivated;
         ViewModel.RequestPin = ShowPinDialogAsync;
+        SettingsPopup.Dismissed += () => _suppressDeactivateHide = false;
+    }
+
+    private void SettingsGearButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (SettingsPopup.Visibility == Visibility.Visible)
+        {
+            SettingsPopup.Hide();
+            _suppressDeactivateHide = false;
+        }
+        else
+        {
+            _suppressDeactivateHide = true;
+            SettingsPopup.Show();
+        }
     }
 
     /// <summary>

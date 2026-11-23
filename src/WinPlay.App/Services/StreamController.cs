@@ -7,6 +7,7 @@ using WinPlay.Core.Discovery;
 using WinPlay.Core.Hap;
 using WinPlay.Core.Mirror;
 using WinPlay.Core.Raop;
+using WinPlay.Core.Settings;
 
 namespace WinPlay.App.Services;
 
@@ -41,6 +42,15 @@ public sealed class StreamController : IAsyncDisposable
     {
         SessionStage += (key, msg) => _diagnostics.Add(key, msg);
         SessionFailed += (key, ex) => _diagnostics.Add(key, $"failed: {ex.Message}");
+        SettingsService.Instance.SettingsChanged += OnSettingsChanged;
+    }
+
+    private void OnSettingsChanged(AppSettings settings)
+    {
+        if (!_audio.IsEmpty || !_mirrors.IsEmpty)
+        {
+            _mover.SetDualAudio(settings.DualAudio, settings.AudioSourceId);
+        }
     }
 
     /// <summary>
@@ -83,9 +93,10 @@ public sealed class StreamController : IAsyncDisposable
             session.Faulted += _ => OnAudioFaulted(dest);
 
             // "Move" the audio like AirPlay on a Mac: capture the system mix and mute the
-            // local speakers so only the receiver plays (avoids a ~2 s echo). Restored on stop.
-            _mover.EnterStreaming();
-            await session.StartStreamingAsync(_mover.CreateCaptureSource(), volumeDb).ConfigureAwait(false);
+            // local speakers so only the receiver plays (avoids a ~2 s echo), unless Dual Audio is enabled.
+            var settings = SettingsService.Instance.Current;
+            _mover.EnterStreaming(settings.AudioSourceId, settings.DualAudio);
+            await session.StartStreamingAsync(_mover.CreateCaptureSource(settings.AudioSourceId), volumeDb).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -140,7 +151,8 @@ public sealed class StreamController : IAsyncDisposable
                         }
                         dest.Session = session;
                         session.Faulted += _ => OnAudioFaulted(dest);
-                        await session.StartStreamingAsync(_mover.CreateCaptureSource(), dest.VolumeDb).ConfigureAwait(false);
+                        var settings = SettingsService.Instance.Current;
+                        await session.StartStreamingAsync(_mover.CreateCaptureSource(settings.AudioSourceId), dest.VolumeDb).ConfigureAwait(false);
                         SessionStage?.Invoke(dest.Entry.Key, "reconnected");
                         return;
                     }
@@ -232,7 +244,16 @@ public sealed class StreamController : IAsyncDisposable
         var session = await MirrorSession.ConnectAsync(address, leader.AirPlayPort ?? 7000, credentials,
             stage => SessionStage?.Invoke(entry.Key, stage), timeout.Token).ConfigureAwait(false);
 
-        var source = new ScreenMirrorSource();
+        var settings = SettingsService.Instance.Current;
+        var (adapterIdx, outputIdx) = SettingsService.Instance.GetDisplayIndices(settings.DisplaySourceId);
+
+        var source = new ScreenMirrorSource(
+            fps: settings.MaxFramerate,
+            adapterIndex: adapterIdx,
+            outputIndex: outputIdx,
+            customWidth: settings.DownscaleWidth,
+            customHeight: settings.DownscaleHeight);
+
         source.Diagnostic += d => SessionStage?.Invoke(entry.Key, $"capture: {d}");
         if (!_mirrors.TryAdd(entry.Key, new MirrorDestination(session, source)))
         {
@@ -242,12 +263,12 @@ public sealed class StreamController : IAsyncDisposable
         }
 
         // Mirror carries audio in the same session (Apple TV syncs A/V itself). Mute the PC
-        // and feed system audio, unless audio-only to this destination is already running.
+        // and feed system audio (unless Dual Audio enabled), using the selected audio source.
         WinPlay.Core.Audio.IAudioSource? mirrorAudio = null;
         if (session.HasAudio && !_audio.ContainsKey(entry.Key))
         {
-            _mover.EnterStreaming();
-            mirrorAudio = _mover.CreateCaptureSource();
+            _mover.EnterStreaming(settings.AudioSourceId, settings.DualAudio);
+            mirrorAudio = _mover.CreateCaptureSource(settings.AudioSourceId);
         }
         _ = session.StartStreamingAsync(source, mirrorAudio);
     }
@@ -308,6 +329,7 @@ public sealed class StreamController : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        SettingsService.Instance.SettingsChanged -= OnSettingsChanged;
         _lifetime.Cancel();
         foreach (string key in _audio.Keys.ToArray())
             await StopAudioAsync(key).ConfigureAwait(false);

@@ -1,0 +1,252 @@
+<UserControl
+    x:Class="WinPlay.App.Views.SettingsPopupView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:services="using:WinPlay.App.Services"
+    mc:Ignorable="d">
+
+    <Grid>
+        <!-- Semi-transparent backdrop for light-dismiss -->
+        <Border
+            x:Name="BackdropBorder"
+            Background="{ThemeResource SmokeFillColorDefaultBrush}"
+            PointerPressed="Backdrop_PointerPressed" />
+
+        <!-- Settings Popup Card -->
+        <Border
+            x:Name="CardBorder"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch"
+            Margin="6,4,6,6"
+            Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+            BorderThickness="1"
+            CornerRadius="12"
+            Padding="14,12,14,12">
+
+            <Grid RowSpacing="10">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <!-- Header -->
+                <Grid Grid.Row="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <FontIcon Glyph="&#xE713;" FontSize="16" VerticalAlignment="Center" />
+                        <TextBlock Text="Settings" Style="{StaticResource BodyStrongTextBlockStyle}" VerticalAlignment="Center" />
+                    </StackPanel>
+
+                    <Button
+                        Grid.Column="1"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Padding="6"
+                        CornerRadius="6"
+                        ToolTipService.ToolTip="Close Settings"
+                        Click="CloseButton_Click">
+                        <FontIcon Glyph="&#xE8BB;" FontSize="12" />
+                    </Button>
+                </Grid>
+
+                <!-- Scrollable Settings List -->
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" MaxHeight="450">
+                    <StackPanel Spacing="10" Padding="0,0,4,0">
+
+                        <!-- 1. Dual Audio -->
+                        <Border
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="12,10">
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                    <TextBlock Text="Dual Audio" Style="{StaticResource BodyTextBlockStyle}" />
+                                    <TextBlock
+                                        Text="Keep playing audio on PC speakers while streaming"
+                                        Style="{StaticResource CaptionTextBlockStyle}"
+                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                        TextWrapping="Wrap" />
+                                </StackPanel>
+                                <ToggleSwitch
+                                    x:Name="DualAudioToggle"
+                                    Grid.Column="1"
+                                    OnContent=""
+                                    OffContent=""
+                                    MinWidth="0"
+                                    VerticalAlignment="Center"
+                                    Toggled="DualAudioToggle_Toggled" />
+                            </Grid>
+                        </Border>
+
+                        <!-- 2. Selective Audio Source -->
+                        <Border
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="12,10">
+                            <StackPanel Spacing="6">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon Glyph="&#xE767;" FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <TextBlock Text="Audio Source" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                </StackPanel>
+                                <TextBlock
+                                    Text="Select output device for audio-sharing and mirroring"
+                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    TextWrapping="Wrap" />
+                                <ComboBox
+                                    x:Name="AudioSourceCombo"
+                                    HorizontalAlignment="Stretch"
+                                    DisplayMemberPath="DisplayName"
+                                    SelectionChanged="AudioSourceCombo_SelectionChanged" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 3. Selective Display Source -->
+                        <Border
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="12,10">
+                            <StackPanel Spacing="6">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon Glyph="&#xE7F4;" FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <TextBlock Text="Display Source" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                </StackPanel>
+                                <TextBlock
+                                    Text="Select monitor to capture when screen-mirroring"
+                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    TextWrapping="Wrap" />
+                                <ComboBox
+                                    x:Name="DisplaySourceCombo"
+                                    HorizontalAlignment="Stretch"
+                                    DisplayMemberPath="DisplayName"
+                                    SelectionChanged="DisplaySourceCombo_SelectionChanged" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 4. Resolution Downscaling -->
+                        <Border
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="12,10">
+                            <StackPanel Spacing="8">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon Glyph="&#xE790;" FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <TextBlock Text="Resolution Downscaling" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                </StackPanel>
+                                <TextBlock
+                                    Text="Custom video dimensions for screen-mirroring"
+                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    TextWrapping="Wrap" />
+
+                                <Grid ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <NumberBox
+                                        x:Name="DownscaleWidthBox"
+                                        Grid.Column="0"
+                                        Header="Width"
+                                        SpinButtonPlacementMode="Inline"
+                                        Minimum="2"
+                                        Maximum="7680"
+                                        SmallChange="2"
+                                        ValueChanged="DownscaleWidthBox_ValueChanged" />
+
+                                    <ToggleButton
+                                        x:Name="AspectLockToggle"
+                                        Grid.Column="1"
+                                        VerticalAlignment="Bottom"
+                                        Margin="0,0,0,2"
+                                        Padding="6"
+                                        CornerRadius="6"
+                                        ToolTipService.ToolTip="Aspect Ratio Lock"
+                                        Click="AspectLockToggle_Click">
+                                        <FontIcon x:Name="AspectLockIcon" Glyph="&#xE72E;" FontSize="14" />
+                                    </ToggleButton>
+
+                                    <NumberBox
+                                        x:Name="DownscaleHeightBox"
+                                        Grid.Column="2"
+                                        Header="Height"
+                                        SpinButtonPlacementMode="Inline"
+                                        Minimum="2"
+                                        Maximum="4320"
+                                        SmallChange="2"
+                                        ValueChanged="DownscaleHeightBox_ValueChanged" />
+                                </Grid>
+
+                                <TextBlock
+                                    x:Name="AspectRatioText"
+                                    Text="Aspect Ratio: 16:9"
+                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 5. Max Framerate -->
+                        <Border
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1"
+                            CornerRadius="8"
+                            Padding="12,10">
+                            <StackPanel Spacing="6">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon Glyph="&#xEC4A;" FontSize="14" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                    <TextBlock Text="Max Framerate" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                </StackPanel>
+                                <TextBlock
+                                    Text="Limits mirror framerate (range: 24–60 fps)"
+                                    Style="{StaticResource CaptionTextBlockStyle}"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    TextWrapping="Wrap" />
+                                <NumberBox
+                                    x:Name="MaxFramerateBox"
+                                    Header="Framerate (fps)"
+                                    SpinButtonPlacementMode="Inline"
+                                    Minimum="24"
+                                    Maximum="60"
+                                    SmallChange="1"
+                                    ValueChanged="MaxFramerateBox_ValueChanged" />
+                            </StackPanel>
+                        </Border>
+
+                        <!-- 6. Reset to Defaults -->
+                        <Button
+                            x:Name="ResetDefaultsButton"
+                            Content="Reset to defaults"
+                            HorizontalAlignment="Stretch"
+                            CornerRadius="8"
+                            Padding="12,8"
+                            Click="ResetToDefaults_Click" />
+
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

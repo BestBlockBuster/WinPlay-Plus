@@ -22,18 +22,29 @@ public sealed class SystemAudioMover : IDisposable
     private bool _processLoopbackSupported = true;
     private bool _muting;
     private bool _priorMute;
+    private string? _mutedDeviceId;
 
-    /// <summary>Mutes the local output endpoint (idempotent) so only the receiver is audible.</summary>
-    public void EnterStreaming()
+    public bool DualAudio { get; private set; }
+
+    /// <summary>
+    /// Mutes the output endpoint (idempotent) so only the receiver is audible,
+    /// unless <paramref name="dualAudio"/> is true.
+    /// </summary>
+    public void EnterStreaming(string? deviceId = null, bool dualAudio = false)
     {
         lock (_lock)
         {
-            if (_muting || !_processLoopbackSupported) return;
+            DualAudio = dualAudio;
+            if (dualAudio || _muting || !_processLoopbackSupported) return;
             try
             {
                 using var enumerator = new MMDeviceEnumerator();
-                var device = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+                MMDevice device = !string.IsNullOrEmpty(deviceId)
+                    ? enumerator.GetDevice(deviceId)
+                    : enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+
                 _priorMute = device.AudioEndpointVolume.Mute;
+                _mutedDeviceId = device.ID;
                 device.AudioEndpointVolume.Mute = true;
                 _muting = true;
             }
@@ -44,7 +55,7 @@ public sealed class SystemAudioMover : IDisposable
         }
     }
 
-    /// <summary>Restores the local endpoint's prior mute state.</summary>
+    /// <summary>Restores the output endpoint's prior mute state.</summary>
     public void ExitStreaming()
     {
         lock (_lock)
@@ -53,21 +64,62 @@ public sealed class SystemAudioMover : IDisposable
             try
             {
                 using var enumerator = new MMDeviceEnumerator();
-                var device = enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
-                device.AudioEndpointVolume.Mute = _priorMute;
+                MMDevice? device = null;
+                if (!string.IsNullOrEmpty(_mutedDeviceId))
+                {
+                    try { device = enumerator.GetDevice(_mutedDeviceId); } catch { }
+                }
+                device ??= enumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+                if (device != null)
+                {
+                    device.AudioEndpointVolume.Mute = _priorMute;
+                }
             }
             catch (Exception) { /* endpoint gone; nothing to restore */ }
             _muting = false;
+            _mutedDeviceId = null;
+        }
+    }
+
+    /// <summary>Dynamically updates the Dual Audio mode during active streaming.</summary>
+    public void SetDualAudio(bool dualAudio, string? deviceId = null)
+    {
+        lock (_lock)
+        {
+            DualAudio = dualAudio;
+            if (dualAudio && _muting)
+            {
+                ExitStreaming();
+            }
+            else if (!dualAudio && !_muting)
+            {
+                EnterStreaming(deviceId, dualAudio: false);
+            }
         }
     }
 
     /// <summary>
     /// Creates an audio source for a streaming session. Prefers process-loopback capture
-    /// (excludes WinPlay itself, survives the endpoint mute); falls back to endpoint
-    /// loopback if process loopback can't start, disabling the local mute for this run.
+    /// for the default device (excludes WinPlay itself, survives the endpoint mute);
+    /// uses specific device loopback if a custom device is selected, or falls back to
+    /// endpoint loopback.
     /// </summary>
-    public IAudioSource CreateCaptureSource()
+    public IAudioSource CreateCaptureSource(string? deviceId = null)
     {
+        if (!string.IsNullOrEmpty(deviceId))
+        {
+            try
+            {
+                using var enumerator = new MMDeviceEnumerator();
+                var dev = enumerator.GetDevice(deviceId);
+                if (dev != null)
+                {
+                    return new LoopbackAudioSource(dev);
+                }
+            }
+            catch (Exception) { /* fallback to default */ }
+        }
+
         if (_processLoopbackSupported)
         {
             try
