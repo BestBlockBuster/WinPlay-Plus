@@ -1,6 +1,7 @@
 # Disclaimer
 
 ***This open-source software is a modification of &nbsp;[![WinPlay](https://img.shields.io/badge/WinPlay-purple?logo=github)](https://github.com/dineshdhotrad/WinPlay)&nbsp; (v0.1.1) &nbsp;built by &nbsp;[![Dinesh Dhotrad](https://img.shields.io/badge/Dinesh_Dhotrad-purple?logo=github)](https://github.com/dineshdhotrad?logo=github)&nbsp; .***
+
 <br>
 
 ***My added features*** &nbsp;are the options within the new settings menu:
