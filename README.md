@@ -1,8 +1,9 @@
 # Disclaimer
 
-&nbsp;***This open-source software is a modification of [![WinPlay](https://img.shields.io/badge/WinPlay-purple?logo=github)](https://github.com/dineshdhotrad/WinPlay) built by [![Dinesh Dhotrad](https://img.shields.io/badge/Dinesh_Dhotrad-purple?logo=github)](https://github.com/dineshdhotrad?logo=github)***&nbsp; .
+***This open-source software is a modification of &nbsp;[![WinPlay](https://img.shields.io/badge/WinPlay-purple?logo=github)](https://github.com/dineshdhotrad/WinPlay)&nbsp; built by &nbsp;[![Dinesh Dhotrad](https://img.shields.io/badge/Dinesh_Dhotrad-purple?logo=github)](https://github.com/dineshdhotrad?logo=github)&nbsp; .***
+<br>
 
-My modifications are the options within the new settings menu:
+***My added features*** &nbsp;are the options within the new settings menu:
 
 - Dual Audio
 
@@ -21,6 +22,13 @@ My modifications are the options within the new settings menu:
   - Lowering the framerate and/or resolution can provide a smoother image and reduce stuttering/freezing.
 - Settings Persist
   - All of these settings will remain as you left them upon reopening the app.
+
+<br>
+
+CURRENT LIMITATIONS:
+
+- When screen-sharing a static, non-media app such as vs-code, the appleTV sometimes pops up it's screensaver, which is impossible to get out of without restarting your mirroring.
+
 
 <div align="center">
 
